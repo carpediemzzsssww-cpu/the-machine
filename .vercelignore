@@ -1,0 +1,10 @@
+.git
+.vercel
+.playwright-cli
+output
+docs
+README.md
+LICENSE
+progress.md
+node_modules
+*.log

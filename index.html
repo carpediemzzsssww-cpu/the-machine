@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080B0D">
+<title>THE MACHINE</title>
+<meta name="description" content="An interactive archive of watching eyes.">
+<link rel="stylesheet" href="css/machine.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<canvas id="stage" aria-label="THE MACHINE — 监控摄像头摄影档案，可拖动、缩放、点击照片"></canvas>
+<canvas id="fx"></canvas>
+
+<div id="boot" aria-live="polite">
+  <div class="boot-line"><span id="bootText"></span><i class="caret"></i></div>
+  <div class="boot-sub" id="bootSub"></div>
+</div>
+
+<header class="hud hud-tl">
+  <div class="mark">THE MACHINE</div>
+  <div class="status"><i class="dot"></i><span id="statusText">SYSTEM ACTIVE</span></div>
+  <div class="coord" id="coord">SECTOR 00·00</div>
+</header>
+
+<div class="hud hud-tr">
+  <div id="eyes"><b id="eyeCount">0</b> EYES ONLINE</div>
+  <button id="observer">+1 OBSERVER</button>
+  <div id="clock" class="clock"></div>
+</div>
+
+<div class="hud feed" id="feed" aria-hidden="true"></div>
+
+<div class="hud hud-bl" id="traceBox">
+  <button id="traceLabel" title="T · 显示 / 隐藏路径">TRACE_0001</button>
+  <div id="traceStrip"></div>
+</div>
+
+<nav class="hud hud-br" aria-label="探索与设置">
+  <button id="btnHunt" class="hunt" title="H">▶ THE SEARCH</button>
+  <div class="seg" role="tablist">
+    <button id="btnGrid" class="on" role="tab" aria-selected="true" title="G">GRID</button>
+    <button id="btnAtlas" role="tab" aria-selected="false" title="A">ATLAS</button>
+  </div>
+  <button id="btnSubmit" title="U">+ EYE</button>
+  <button id="btnSound" title="M">SOUND OFF</button>
+  <a id="btnCredits" href="credits.html" target="_blank" rel="noopener">CREDITS</a>
+</nav>
+
+<div id="hint" class="hint"></div>
+<div id="say" class="say"></div>
+
+<section id="focusMeta" class="focus-meta" aria-live="polite">
+  <div class="fm-tag" id="fmTag">ASSET</div>
+  <div class="fm-id" id="fmId">CAM_0000</div>
+  <div class="fm-line" id="fmScene"></div>
+  <div class="fm-line" id="fmGeo"></div>
+  <div class="fm-line fm-anchor" id="fmAnchor"></div>
+</section>
+<div id="credit" class="credit"></div>
+<aside id="related" class="related" aria-label="related"></aside>
+<button id="back" class="back" aria-label="返回照片墙">← BACK</button>
+
+<!-- THE SEARCH: game HUD -->
+<section id="hunt" class="hunt-hud" aria-live="polite">
+  <div class="h-card">
+    <div class="h-head"><span id="hCase">CASE 0000</span><span id="hRound">TARGET 1/5</span></div>
+    <div class="h-target"><canvas id="hThumb" width="168" height="168"></canvas><i class="h-scan"></i></div>
+    <div class="h-id" id="hId">CAM_0000</div>
+    <div class="h-meta" id="hMeta">LAST SEEN · SECTOR —</div>
+    <div class="h-time" id="hTime">00:00.00</div>
+    <div class="h-heat"><i id="hHeat"></i></div>
+    <div class="h-dist" id="hDist">SIGNAL —</div>
+    <div class="h-help">找到这台摄像头 · 点开照片 · 点击镜头确认</div>
+    <button id="hQuit" class="h-quit">ABORT</button>
+  </div>
+</section>
+
+<section id="modal" class="modal" role="dialog" aria-modal="true" aria-label="THE MACHINE" inert><div class="m-box" id="mBox" tabindex="-1"></div></section>
+<input type="file" id="fileIn" accept="image/*" hidden>
+
+<noscript><p style="color:#ccc;font:14px monospace;padding:40px">THE MACHINE requires JavaScript.</p></noscript>
+<script src="data/photos.js"></script>
+<script src="data/world.js"></script>
+<script src="js/machine.js"></script>
+</body>
+</html>
