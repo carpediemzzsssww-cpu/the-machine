@@ -12,3 +12,12 @@ Verified locally with Chrome and Playwright, including a mobile context with tou
 - Deployment: static files, no dependency installation or compilation required. Vercel completion is checked through the deployment command; the deployed URL is not fetched as part of QA.
 
 Screenshots and local automation output are excluded from Git, except for the README cover.
+
+## Game experience iteration
+
+- Completed quick SEARCH and DIVE runs (three targets each) in a 390×844 touch context; validated free photo inspection, incorrect confirmation (+2 s), clue preview, environment hint (+8 s), frozen pause/round-completion timers, explicit next-round controls, and results.
+- Completed a five-target daily DIVE challenge at 320×568; validated deterministic targets, one leaderboard record per completed run, PNG score-card download, and sound toggle in the pause menu.
+- Tested pausing during a portal, resuming route controls, canceling an exit, and clearing the session on confirmed exit.
+- Inspected portrait/landscape gameplay screenshots. Read-only render_game_to_text state agrees with visible controls and progress; no page errors in these runs.
+- Ran the develop-web-game skill action client for SEARCH and DIVE using installed Chrome. A local loader bypasses an obsolete skill dependency symlink; no skill files were edited. Supplemental UI flows use the same browser automation CLI.
+- Daily scores use the current game rules and a separate local storage bucket from the earlier version.

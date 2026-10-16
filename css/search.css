@@ -1,0 +1,54 @@
+/* Search game: briefings, legible clues, and touch controls. */
+button{-webkit-tap-highlight-color:transparent}
+.hunt-hud{top:20px;left:50%;width:min(390px,calc(100% - 28px));max-width:390px;transform:translate(-50%,-12px);opacity:0;pointer-events:none;z-index:6}
+body.hunting .hunt-hud,body.hunting.focus .hunt-hud{transform:translate(-50%,0);opacity:1}
+.h-card{position:relative;display:grid;grid-template-columns:76px minmax(0,1fr);grid-template-rows:none;gap:5px 14px;width:100%;min-width:0;padding:14px;background:rgba(8,11,13,.96);border:1px solid rgba(217,83,74,.5)}
+.h-head{grid-column:1/-1;margin:0;font-size:9px;letter-spacing:.1em;gap:8px}
+.h-progress{grid-column:1/-1;display:flex;gap:5px;margin:4px 0 7px}
+.h-progress i{height:3px;flex:1;background:#283033}.h-progress i.current{background:var(--threat)}.h-progress i.done{background:var(--scanner)}
+.h-target{grid-row:3/7;position:relative;width:76px;height:76px;overflow:hidden;outline:1px solid var(--threat);outline-offset:0;pointer-events:auto;align-self:center;cursor:zoom-in}
+.h-target canvas{width:100%;height:100%;display:block}.h-target span{position:absolute;bottom:0;left:0;right:0;background:rgba(8,11,13,.88);padding:4px 0;font-size:8px;letter-spacing:0;color:var(--foreground)}
+.h-id{font-size:16px;letter-spacing:.1em;line-height:1.4}.h-meta{font-size:9px;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.h-time{font-size:24px;line-height:1.1;margin:0;letter-spacing:.02em;font-variant-numeric:tabular-nums}.h-heat{width:100%;height:3px;margin:3px 0}
+.h-dist{grid-column:1/-1;font:10px/1.6 var(--mono);letter-spacing:.03em;color:#b4c0c2;margin-top:4px}
+.h-feedback{grid-column:1/-1;min-height:38px;padding:7px 0 5px;font:12px/1.6 -apple-system,"PingFang SC",sans-serif;letter-spacing:0;color:var(--foreground)}
+.h-feedback[data-tone="good"]{color:var(--scanner)}.h-feedback[data-tone="warn"]{color:var(--admin)}
+.h-actions{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 52px 52px;gap:6px;pointer-events:auto;border-top:1px solid #283033;padding-top:8px}
+.h-actions button{position:static;min-height:40px;padding:6px;font:11px/1.4 -apple-system,"PingFang SC",sans-serif;letter-spacing:0;border:1px solid #303a3d;color:#b4c0c2}
+.h-actions .h-action{color:var(--admin);border-color:rgba(232,197,71,.45)}.h-actions .h-action.ready{background:var(--scanner);border-color:var(--scanner);color:#080B0D;font-weight:600}
+.h-actions button:hover{border-color:var(--foreground)}
+body.hunting .hud-br,body.hunting .hud-bl,body.hunting .focus-meta,body.hunting .hint,body.hunting .feed{display:none}
+body.hunting .hud-tl,body.hunting .hud-tr{opacity:.3;pointer-events:none}body.hunting #observer{pointer-events:none}
+body.hunting .credit{bottom:18px;font-size:9px;max-width:calc(100vw - 40px)}
+body.hunting.dive .credit{bottom:94px}
+body.hunting.search.focus .back{display:block;top:20px;left:26px;right:auto;transform:none;min-height:44px;padding:8px 12px;background:rgba(8,11,13,.94);pointer-events:auto}
+.hunt-routes{position:fixed;bottom:max(16px,env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);width:min(620px,calc(100% - 28px));z-index:6;pointer-events:auto}
+.hunt-routes[hidden]{display:none}.route-label{font:11px/1.6 -apple-system,"PingFang SC",sans-serif;text-align:center;color:var(--muted);margin-bottom:8px;letter-spacing:.04em}
+.route-list{display:flex;gap:8px;overflow-x:auto;touch-action:pan-x;padding:2px;scrollbar-width:thin}
+.route-list button{flex:1;min-width:116px;min-height:52px;border:1px solid #394448;background:rgba(8,11,13,.96);color:#b4c0c2;padding:8px 10px;text-align:left;font:11px/1.4 -apple-system,"PingFang SC",sans-serif}
+.route-list b{display:block;color:var(--foreground);font:11px var(--mono);margin-bottom:4px;letter-spacing:.08em}.route-list button[data-warmer="true"]{border-color:rgba(232,197,71,.65);color:var(--admin)}
+.route-list button.suggested{outline:2px solid var(--scanner);outline-offset:-3px}.route-list button:disabled{opacity:.5}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.mode-card{border:1px solid #303a3d;padding:15px;text-align:left;min-height:148px;display:flex;flex-direction:column;gap:8px}
+.mode-card[aria-pressed="true"]{border-color:var(--admin);background:rgba(232,197,71,.045)}.mode-card b{color:var(--foreground);font-size:16px;letter-spacing:.08em}.mode-card span{font:12px/1.7 -apple-system,"PingFang SC",sans-serif;letter-spacing:0;color:#aab5ba}.mode-card small{color:var(--admin);font-size:9px;letter-spacing:.08em;margin-top:auto}
+.run-options{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap}.run-option{flex:1;min-width:150px;min-height:62px;padding:10px;border:1px solid #303a3d;text-align:left;font:12px/1.6 -apple-system,"PingFang SC",sans-serif;letter-spacing:0}.run-option[aria-pressed="true"]{border-color:var(--scanner)}.run-option span{display:block;color:var(--muted);font-size:11px}
+.game-start{width:100%;min-height:48px;margin-top:6px;font:13px -apple-system,"PingFang SC",sans-serif;letter-spacing:.04em}
+.game-note{font:11px/1.8 -apple-system,"PingFang SC",sans-serif;color:var(--muted);letter-spacing:0;margin-top:12px}
+.target-detail{display:block;width:216px;max-width:100%;margin:16px auto;border:1px solid var(--threat)}.scene-detail{display:block;max-width:100%;max-height:42dvh;margin:14px auto;object-fit:contain}
+.game-stats{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.game-stats div{flex:1;min-width:90px;border-top:1px solid #303a3d;padding-top:10px;font-size:10px}.game-stats b{display:block;color:var(--foreground);font-size:22px;font-weight:400}
+body.hunting[data-phase="locked"] .h-card{border-color:var(--scanner)}body.hunting[data-phase="locked"] .h-progress i.current{background:var(--scanner)}
+@media(max-width:900px){
+  .hunt-hud{top:calc(10px + env(safe-area-inset-top,0px));width:calc(100% - max(14px,env(safe-area-inset-left,0px)) - max(14px,env(safe-area-inset-right,0px)));max-width:390px}
+  .h-card{padding:11px;grid-template-columns:68px minmax(0,1fr);gap:3px 12px}.h-target{width:68px;height:68px}.h-id{font-size:15px}.h-time{font-size:22px}.h-head{font-size:9px}.h-meta{font-size:8px;display:block}.h-dist{font-size:10px}.h-feedback{font-size:12px;min-height:36px}.h-actions button{min-height:44px}.h-actions{grid-template-columns:minmax(0,1fr) 48px 48px}
+  body.hunting .hud-tl,body.hunting .hud-tr{opacity:0}body.hunting.search.focus .back{top:auto;bottom:calc(34px + env(safe-area-inset-bottom,0px));right:max(14px,env(safe-area-inset-right,0px));left:auto;font-size:10px}
+  body.hunting .credit{left:max(14px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));font-size:8px}
+  body.hunting.dive .credit{bottom:calc(106px + env(safe-area-inset-bottom,0px))}
+  .route-list button{min-width:114px;min-height:54px}.mode-card{padding:12px;min-height:155px}.mode-card b{font-size:14px}.modes{gap:8px}
+}
+@media(max-width:900px) and (orientation:landscape) and (max-height:500px){
+  .hunt-hud{left:max(12px,env(safe-area-inset-left,0px));top:max(10px,env(safe-area-inset-top,0px));transform:none;width:250px}
+  body.hunting .hunt-hud,body.hunting.focus .hunt-hud{transform:none}
+  .h-card{padding:10px;grid-template-columns:54px minmax(0,1fr);gap:3px 10px}.h-target{width:54px;height:54px}.h-progress{margin:3px 0 5px}.h-head{font-size:8px}.h-meta{display:none}.h-id{font-size:13px}.h-time{font-size:19px}.h-feedback{min-height:40px;font-size:11px}.h-dist{font-size:9px}
+  .h-actions{grid-template-columns:minmax(0,1fr) 40px 40px}.h-actions button{font-size:10px}
+  .hunt-routes{left:auto;right:max(14px,env(safe-area-inset-right,0px));transform:none;width:calc(100% - 290px)}.route-label{font-size:10px;margin-bottom:5px}.route-list button{min-width:108px;min-height:48px}
+  body.hunting.search.focus .back{top:auto;bottom:30px;right:16px;left:auto}body.hunting .credit{bottom:8px;max-width:230px}body.hunting.dive .credit{bottom:8px}.modes{grid-template-columns:1fr 1fr}
+}

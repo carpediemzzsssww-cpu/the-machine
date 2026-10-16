@@ -354,6 +354,17 @@ function worldRectOf(it, now) {
 function focusRect(p) {
   const narrow = COMPACT(), landscape = narrow && W > H && H <= 500;
   let top = 0, bottom = H;
+  if (S.hunt) {
+    top = landscape ? 20 : $('#hunt').getBoundingClientRect().bottom + 24;
+    const routes = $('#huntRoutes');
+    bottom = S.hunt.mode === 'dive' ? H - (landscape ? 100 : 145) : H - 78;
+    if (!routes.hidden) bottom = routes.getBoundingClientRect().top - 32;
+    if (!landscape) bottom = Math.min(bottom, $('#credit').getBoundingClientRect().top - (S.hunt.mode === 'search' && narrow ? 64 : 32));
+    const left = landscape ? 280 : W * .04, right = W - (landscape ? 20 : W * .04);
+    let w = right - left, h = w / p.a;
+    if (h > bottom - top) { h = Math.max(40, bottom - top); w = h * p.a; }
+    return { x: (left + right - w) / 2, y: (top + bottom - h) / 2, w, h, c: [0, 0, 1, 1] };
+  }
   if (narrow) {
     const meta = S.hunt ? $('#hunt') : $('#focusMeta');
     top = meta.getBoundingClientRect().bottom + 16;
@@ -402,6 +413,7 @@ function unfocus() {
 }
 function enter(target, camIdx = 0) {
   if (S.mode !== 'FOCUS' || !S.sel) return;
+  if (S.hunt && !Hunt.canInteract()) return;
   const from = S.sel;
   const to = target || S.routes[camIdx] || nextPhoto(from);
   if (!to || to === from) return;
@@ -410,6 +422,7 @@ function enter(target, camIdx = 0) {
   const fast = Hunt.fastPortal();
   S.portal = { from, to, fromAnchor, t0: performance.now(), dur: REDUCE ? 700 : fast ? 1050 : 1700, swapped: false, cam: camIdx, feeds: pickFeeds(to) };
   setMode('PORTAL'); whoosh(S.portal.dur / 1000); blip(900, .08, .04);
+  Hunt.onEnter();
   S.jumps++;
 }
 function pickFeeds(to) { const out = []; for (let i = 0; i < 7; i++) out.push(P[Math.floor(rnd() * N)]); out.push(to); return out; }
@@ -529,6 +542,7 @@ const ptr = { x: -1e3, y: -1e3, down: false, moved: 0, lt: 0 };
 const pointers = new Map(); let pinch = null;
 const noteInput = () => { S.lastInput = performance.now(); };
 canvas.addEventListener('pointerdown', e => {
+  if (S.hunt && !Hunt.canInteract()) return;
   noteInput(); canvas.setPointerCapture(e.pointerId);
   if (e.pointerType !== 'mouse') { ptr.x = e.clientX; ptr.y = e.clientY; }
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -577,6 +591,7 @@ function zoomAt(sx, sy, k, immediate) {
 }
 canvas.addEventListener('wheel', e => {
   e.preventDefault(); noteInput();
+  if (S.hunt && !Hunt.canInteract()) return;
   if (S.mode !== 'EXPLORE') return;
   const trackpadPan = !e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaX) > 1.5 && Math.abs(e.deltaY) < 40;
   if (trackpadPan) { view.x += e.deltaX / view.s; view.y += e.deltaY / view.s; view.anim = null; return; }
@@ -601,6 +616,7 @@ function lensHit(p, x, y) {
   return bi;
 }
 function click(x, y) {
+  if (S.hunt && !Hunt.canInteract()) return;
   if (S.mode === 'BOOT') { skipBoot(); return; }
   if (S.mode === 'EXPLORE') {
     if (S.layout === 'grid' && view.s * U < 14) { const [wx, wy] = toWorld(x, y); animView({ x: wx, y: wy, s: Math.max(view.s * 4, fitScale('grid') * .9) }, 900); blip(700, .1, .03); return; }
@@ -630,6 +646,9 @@ addEventListener('keydown', e => {
   if (e.target && e.target.tagName === 'INPUT') return;
   noteInput();
   const k = e.key.toLowerCase();
+  if (S.hunt && (k === 'p' || k === 'escape')) { e.preventDefault(); Hunt.pause(); return; }
+  if (S.hunt && k === 'enter' && S.hunt.phase === 'locked') { Hunt.action(); return; }
+  if (S.hunt && !Hunt.canInteract()) return;
   if (k === 'escape') { if ($('#modal').classList.contains('on')) closeModal(); else if (S.mode === 'FOCUS' && (!S.hunt || S.hunt.mode !== 'dive')) unfocus(); else if (S.mode === 'BOOT') skipBoot(); }
   else if (k === 'enter' && S.mode === 'FOCUS' && !S.hunt) enter();
   else if (k === 'g') setLayout('grid');
@@ -650,7 +669,6 @@ $('#traceLabel').onclick = toggleTrace;
 $('#back').onclick = () => unfocus();
 $('#btnHunt').onclick = () => Hunt.brief();
 $('#btnSubmit').onclick = () => Submit.open();
-$('#hQuit').onclick = () => Hunt.end(false);
 
 /* ---------- BOOT: the machine opens its eye, then the wall never ends ---------- */
 const boot = { t0: 0, revealT0: 0, typed: -1 };
@@ -1166,7 +1184,7 @@ function drawFocused(p, now) {
   ctx.fillStyle = `rgba(220,238,230,${.25 * a})`;
   for (let i = 0; i <= 20; i++) ctx.fillRect(r.x + r.w * i / 20, r.y + r.h + 4, 1, i % 5 ? 3 : 7);
   for (let i = 0; i <= 14; i++) ctx.fillRect(r.x - (i % 5 ? 7 : 11), r.y + r.h * i / 14, i % 5 ? 3 : 7, 1);
-  label(ctx, `ZOOM ${(r.w / p.w * 100).toFixed(1)}%  ·  T ${new Date().toISOString().slice(11, 22)}  ·  ${p.cams.length} EYE${p.cams.length === 1 ? '' : 'S'} DETECTED`, r.x, r.y + r.h + 24, `rgba(129,144,152,${.8 * a})`, 9, null);
+  label(ctx, S.hunt ? `${p.code} · ${p.cams.length} EYE${p.cams.length === 1 ? '' : 'S'}` : `ZOOM ${(r.w / p.w * 100).toFixed(1)}%  ·  T ${new Date().toISOString().slice(11, 22)}  ·  ${p.cams.length} EYE${p.cams.length === 1 ? '' : 'S'} DETECTED`, r.x, r.y + r.h + 24, `rgba(129,144,152,${.8 * a})`, 9, null);
   const inside = ptr.x > r.x && ptr.x < r.x + r.w && ptr.y > r.y && ptr.y < r.y + r.h;
   if (!p.cam) { canvas.classList.toggle('point', inside); canvas.classList.remove('lens'); return; }
   const hit = lensHit(p, ptr.x, ptr.y), over = hit >= 0;
@@ -1182,7 +1200,7 @@ function drawFocused(p, now) {
     const pad2 = isOver ? 4 : 10 + Math.sin(now / 520 + k) * 2;
     const tx = b.x - pad2, ty = b.y - pad2, tw = b.w + pad2 * 2, th = b.h + pad2 * 2;
     const heat = Hunt.heatOf(p, k);
-    const rgb = isTarget ? C.threat : heat || (isOver ? C.admin : C.white);
+    const rgb = isTarget ? (S.hunt.phase === 'locked' ? C.scan : C.threat) : heat || (isOver ? C.admin : C.white);
     const al = (isOver ? .95 : prim ? .72 : .55) * a * (lt < 1 ? .4 + .6 * le : 1);
     if (lt < 1) { bracket(ctx, lerp(r.x, tx, le), lerp(r.y, ty, le), lerp(r.w, tw, le), lerp(r.h, th, le), 12, `rgba(${rgb},${al})`, 1.3); return; }
     const txt = isTarget ? `TARGET · ${p.code}${isOver ? ' · CONFIRM' : ''}` : (prim || isOver) ? `${prim ? p.code : p.code + '.' + (k + 1)}${isOver ? (S.hunt ? ' · ' + Hunt.heatWord(p, k) : ' · ENTER') : ''}` : null;
@@ -1344,240 +1362,291 @@ function hudTick(now) {
  *  Daily case (seeded by date) → same targets for everyone → comparable times. Local leaderboard.
  * ===================================================================== */
 const Hunt = (() => {
-  const RANKS = [[0, 'ADMIN'], [75, 'PRIMARY ASSET'], [140, 'ANALOG INTERFACE'], [240, 'ASSET'], [1e9, 'IRRELEVANT']];
   const today = () => { const d = new Date(); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; };
   const caseNo = () => { const d = new Date(), s = new Date(d.getFullYear(), 0, 0); return Math.floor((d - s) / 864e5); };
-  let H_ = null;
-  const el = id => $(id);
-  const handle = () => { try { return localStorage.getItem('tm_handle') || ''; } catch (e) { return ''; } };
-  const board = key => { try { return JSON.parse(localStorage.getItem('tm_board_' + key) || '[]'); } catch (e) { return []; } };
-  const saveBoard = (key, b) => { try { localStorage.setItem('tm_board_' + key, JSON.stringify(b.slice(0, 20))); } catch (e) { } };
-
-  // graph distance (BFS over links) for DIVE heat; computed lazily from target
-  function distFrom(target) {
-    const rev = new Map(); P.forEach(p => p.links.forEach(id => { const q = byId.get(id); if (q) (rev.get(q) || rev.set(q, []).get(q)).push(p); }));
-    const dist = new Map([[target, 0]]), qu = [target];
-    while (qu.length) { const x = qu.shift(), d = dist.get(x); for (const y of (rev.get(x) || [])) if (!dist.has(y)) { dist.set(y, d + 1); qu.push(y); } }
-    return dist;
+  const handle = () => (readLocal('tm_handle') || '').replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 12);
+  const board = (mode, date = today()) => { try { return JSON.parse(readLocal('tm_board_v2_' + mode + '_' + date) || '[]'); } catch (e) { return []; } };
+  let H_ = null, selectedMode = 'search', daily = false, flash = 0, hudAt = 0;
+  const timers = new Set();
+  function later(fn, ms) { const run = H_; const id = setTimeout(() => { timers.delete(id); if (H_ === run && run) fn(); }, ms); timers.add(id); }
+  function cancelTimers() { timers.forEach(clearTimeout); timers.clear(); }
+  function feedback(text, tone = '') { $('#hFeedback').textContent = text; $('#hFeedback').dataset.tone = tone; }
+  function phase(value) { if (H_) H_.phase = value; document.body.dataset.phase = value; }
+  function elapsed(now = performance.now()) {
+    if (!H_ || H_.phase === 'loading') return 0;
+    if (H_.phase === 'locked') return H_.roundMs;
+    return Math.max(0, (H_.pausedAt ?? now) - H_.t0) + H_.penalty;
   }
-  function pickTargets(mode, daily) {
-    const rng = mulberry(daily ? +today() * 31 + (mode === 'dive' ? 7 : 0) : (Date.now() & 0xffffff));
-    const pool = P.filter(p => p.cam && !p.local && p.cam.bbox[2] * p.cam.bbox[3] > .006 && p.cam.bbox[2] * p.cam.bbox[3] < .5);
-    const out = [];
-    while (out.length < 5) { const p = pool[Math.floor(rng() * pool.length)]; if (!out.includes(p)) out.push(p); }
-    if (mode === 'dive') return out.map((t, i) => { let s; do s = pool[Math.floor(rng() * pool.length)]; while (s === t); return { start: s, target: t }; });
-    return out.map(t => ({ target: t }));
+  function canInteract() { return !H_ || (H_.phase === 'playing' && H_.pausedAt == null); }
+  function modalChanged(open) {
+    if (!H_ || H_.phase !== 'playing') return;
+    if (open && H_.pausedAt == null) H_.pausedAt = performance.now();
+    else if (!open && H_.pausedAt != null) {
+      H_.t0 += performance.now() - H_.pausedAt; H_.pausedAt = null;
+      if (H_.mode === 'dive' && S.mode === 'FOCUS' && S.sel === H_.target) win();
+      if (H_.phase === 'playing') { renderRoutes(); syncAction(); }
+    }
   }
   function brief() {
-    if (S.mode === 'BOOT' || S.mode === 'PORTAL') return;
+    if (H_ || S.mode === 'BOOT' || S.mode === 'PORTAL') return;
     if (S.mode === 'FOCUS') unfocus();
-    const h = handle(), bd = board('search_' + today()), bdd = board('dive_' + today());
-    const best = (b) => b.length ? fmtT(b[0].t) + ' · ' + b[0].h : '—';
-    openModal(`
-      <button class="m-close" data-x>ESC</button>
-      <div class="m-k">THE MACHINE · CASE ${pad(caseNo(), 4)} · ${today()}</div>
-      <div class="m-t">THE SEARCH</div>
-      <div class="m-p">机器给你一个号码。你的任务是在这面没有尽头的墙里找到它。</div>
-      <div class="m-row" style="margin-top:6px">
-        <div style="flex:1;min-width:220px">
-          <div class="m-k" style="color:var(--threat)">MODE 01 · SEARCH</div>
-          <div class="m-p" style="margin:4px 0">看目标特写，拖动/缩放墙面找到那台摄像头，点开照片，点镜头确认。边缘的箭头和信号条会告诉你冷热。5 个目标，比总用时。</div>
-          <div class="m-p" style="margin:4px 0;color:var(--muted)">今日最佳 ${best(bd)}</div>
-        </div>
-        <div style="flex:1;min-width:220px">
-          <div class="m-k" style="color:var(--threat)">MODE 02 · DIVE</div>
-          <div class="m-p" style="margin:4px 0">只能穿越镜头。从起点出发，看每台摄像头的热度（越黄越近），用最少的跳数抵达目标。5 个案件。</div>
-          <div class="m-p" style="margin:4px 0;color:var(--muted)">今日最佳 ${best(bdd)}</div>
-        </div>
+    openModal(`<button class="m-close" data-x>ESC</button>
+      <div class="m-k">THE MACHINE · FIELD OPERATIONS</div><div class="m-t">找到那只眼睛。</div>
+      <div class="m-p">选一种方式，跟着信号走。</div>
+      <div class="modes">
+        <button class="mode-card" data-mode="search" aria-pressed="${selectedMode === 'search'}"><b>01 / SEARCH</b><span>对照目标特写，在照片墙里找出同一台摄像头。</span><small>拖动 · 缩放 · 比对</small></button>
+        <button class="mode-card" data-mode="dive" aria-pressed="${selectedMode === 'dive'}"><b>02 / DIVE</b><span>穿过镜头，选择更接近目标的信号路线。</span><small>选择镜头 · 一跳一跳抵达</small></button>
       </div>
-      <div class="m-row"><span style="letter-spacing:.2em">OPERATOR</span><input class="m-in" id="mHandle" maxlength="12" placeholder="YOUR HANDLE" value="${h}"></div>
-      <div class="m-check"><input type="checkbox" id="mDaily" checked> <label for="mDaily">每日案件（今天所有人的目标相同，可以比成绩）</label></div>
-      <div class="m-row">
-        <button class="m-btn primary" data-go="search">▶ SEARCH</button>
-        <button class="m-btn primary" data-go="dive">▶ DIVE</button>
-        <button class="m-btn" data-board>LEADERBOARD</button>
-      </div>`);
-    $('#mBox').querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
-      const hh = ($('#mHandle').value || 'ANON').toUpperCase().replace(/[^A-Z0-9_\-]/g, '').slice(0, 12) || 'ANON';
-      try { localStorage.setItem('tm_handle', hh); } catch (e) { }
-      start(b.dataset.go, $('#mDaily').checked, hh);
+      <div class="run-options">
+        <button class="run-option" data-run="quick" aria-pressed="${!daily}">快速体验<span>3 个目标 · 先熟悉玩法</span></button>
+        <button class="run-option" data-run="daily" aria-pressed="${daily}">每日挑战<span>5 个目标 · 同日相同案件</span></button>
+      </div>
+      <div class="m-row"><label for="mHandle">行动代号（可不填）</label><input class="m-in" id="mHandle" maxlength="12" placeholder="ANON" value="${handle()}" autocomplete="off" spellcheck="false"></div>
+      <button class="m-btn primary game-start" id="mStart">开始${selectedMode === 'search' ? '寻找' : '穿越'} →</button>
+      <div class="game-note">查看特写与暂停不计时。需要帮助时可换取线索，每次 +8 秒。<br>只在确认错目标时 +2 秒，查看照片不会扣分。</div>
+      <div class="m-row"><button class="m-btn" data-board>查看今日排行榜</button></div>`);
+    $('#mBox').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+      selectedMode = b.dataset.mode;
+      $('#mBox').querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      $('#mStart').textContent = `开始${selectedMode === 'search' ? '寻找' : '穿越'} →`;
     });
-    $('#mBox').querySelector('[data-board]').onclick = () => showBoard();
+    $('#mBox').querySelectorAll('[data-run]').forEach(b => b.onclick = () => {
+      daily = b.dataset.run === 'daily'; $('#mBox').querySelectorAll('[data-run]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    });
+    $('#mStart').onclick = () => {
+      const h = ($('#mHandle').value || 'ANON').toUpperCase().replace(/[^A-Z0-9_\-]/g, '').slice(0, 12) || 'ANON';
+      try { localStorage.setItem('tm_handle', h); } catch (e) { }
+      start(selectedMode, daily, h);
+    };
+    $('#mBox').querySelector('[data-board]').onclick = showBoard;
   }
   function showBoard() {
-    const rows = (k) => board(k).map((r, i) => `<tr class="${r.h === handle() ? 'me' : ''}"><td>${pad(i + 1)}</td><td>${r.h}</td><td>${r.rank}</td><td>${r.mode === 'dive' ? r.hops + ' HOPS · ' : ''}${fmtT(r.t)}</td></tr>`).join('') || '<tr><td>—</td><td>NO RECORDS YET</td><td></td><td></td></tr>';
-    openModal(`<button class="m-close" data-x>ESC</button><div class="m-k">LEADERBOARD · THIS DEVICE · ${today()}</div>
-      <div class="m-t">OPERATORS</div>
-      <div class="m-k" style="margin-top:8px">SEARCH</div><table class="m-table">${rows('search_' + today())}</table>
-      <div class="m-k" style="margin-top:18px">DIVE</div><table class="m-table">${rows('dive_' + today())}</table>
-      <div class="m-p" style="color:var(--muted)">排行榜保存在本机浏览器。成绩卡可以下载分享；同一天的每日案件目标一致。</div>
-      <div class="m-row"><button class="m-btn primary" data-back>BACK</button></div>`);
+    const rows = mode => board(mode).slice(0, 10).map((r, i) => `<tr><td>${pad(i + 1)}</td><td>${r.h.replace(/[^A-Z0-9_\-]/g, '')}</td><td>${fmtT(r.t)}</td><td>${mode === 'dive' ? r.hops + ' 跳' : r.assists + ' 次线索'}</td></tr>`).join('') || '<tr><td colspan="4">今天还没有完成的挑战。</td></tr>';
+    openModal(`<button class="m-close" data-x>ESC</button><div class="m-k">DAILY CASE · ${today()} · THIS DEVICE</div><div class="m-t">今日行动记录</div>
+      <div class="m-k">SEARCH</div><table class="m-table">${rows('search')}</table><div class="m-k" style="margin-top:20px">DIVE</div><table class="m-table">${rows('dive')}</table>
+      <div class="game-note">每日挑战按总用时排序，DIVE 用时相同则按跳数排序。线索和误判时间已计入。记录只保存在此浏览器。</div><div class="m-row"><button class="m-btn primary" data-back>返回选择玩法</button></div>`);
     $('#mBox').querySelector('[data-back]').onclick = brief;
   }
-  function start(mode, daily, h) {
-    closeModal();
-    clearTimeout(hintTimer); $('#hint').classList.remove('on');
-    if (S.layout !== 'grid') { S.layout = 'grid'; document.body.classList.remove('atlas'); $('#btnGrid').classList.add('on'); $('#btnAtlas').classList.remove('on'); $('#btnGrid').setAttribute('aria-selected', 'true'); $('#btnAtlas').setAttribute('aria-selected', 'false'); }
-    H_ = S.hunt = { mode, daily, h, rounds: pickTargets(mode, daily), round: -1, total: 0, misses: 0, hops: 0, splits: [], t0: 0, started: performance.now() };
-    document.body.classList.add('hunting');
-    say(mode === 'search' ? 'YOU HAVE A NEW NUMBER' : 'FOLLOW THE SIGNAL', `CASE ${pad(caseNo(), 4)} · ${mode.toUpperCase()} · OPERATOR ${h}`);
-    chord([440, 554, 659]);
-    setTimeout(next, 1700);
+  function distFrom(target) {
+    const rev = new Map(); P.filter(p => !p.local).forEach(p => p.links.forEach(id => { const q = byId.get(id); if (q) (rev.get(q) || rev.set(q, []).get(q)).push(p); }));
+    const dist = new Map([[target, 0]]), queue = [target];
+    for (let i = 0; i < queue.length; i++) { const x = queue[i]; for (const y of rev.get(x) || []) if (!dist.has(y)) { dist.set(y, dist.get(x) + 1); queue.push(y); } }
+    return dist;
+  }
+  function pickTargets(mode, isDaily) {
+    const rng = mulberry(isDaily ? +today() * 31 + (mode === 'dive' ? 7 : 0) : Date.now() & 0xffffff);
+    const pool = P.filter(p => p.cam && !p.local && p.cam.bbox[2] * p.cam.bbox[3] > .012 && p.cam.bbox[2] * p.cam.bbox[3] < .5);
+    const remaining = pool.slice(), out = [], count = isDaily ? 5 : 3;
+    while (out.length < count && remaining.length) {
+      const target = remaining.splice(Math.floor(rng() * remaining.length), 1)[0];
+      if (mode === 'search') { out.push({ target }); continue; }
+      const dist = distFrom(target), desired = (isDaily ? 3 : 2) + out.length % (isDaily ? 3 : 2);
+      const starts = pool.filter(p => dist.get(p) === desired);
+      const fallback = pool.filter(p => p !== target && dist.get(p) > 0 && dist.get(p) <= desired);
+      const use = starts.length ? starts : fallback;
+      if (use.length) out.push({ target, start: use[Math.floor(rng() * use.length)] });
+    }
+    return out;
+  }
+  function start(mode, isDaily, h) {
+    if (H_ || S.mode === 'BOOT' || S.mode === 'PORTAL') return;
+    closeModal(); cancelTimers(); clearTimeout(hintTimer); $('#hint').classList.remove('on'); $('#say').classList.remove('on');
+    const returnView = S.layout === 'grid' ? { x: view.x, y: view.y, s: view.s } : { x: 0, y: 0, s: fitScale('grid') };
+    S.morph = null; S.layout = 'grid'; S.focus = 0; S.focusAnim = null; S.sel = S.selInst = null; setMode('EXPLORE');
+    document.body.classList.remove('atlas'); $('#btnGrid').classList.add('on'); $('#btnAtlas').classList.remove('on');
+    $('#btnGrid').setAttribute('aria-selected', 'true'); $('#btnAtlas').setAttribute('aria-selected', 'false');
+    H_ = S.hunt = { mode, daily: isDaily, h, date: today(), rounds: pickTargets(mode, isDaily), round: -1, total: 0, misses: 0, hops: 0, assists: 0, splits: [], returnView, phase: 'loading', pausedAt: null };
+    document.body.classList.add('hunting', mode); next(); chord([440, 554, 659]);
+  }
+  function safeArea() {
+    const landscape = COMPACT() && W > H && H <= 500;
+    return { top: landscape ? 20 : $('#hunt').getBoundingClientRect().bottom + 18, bottom: H - (H_.mode === 'dive' ? 124 : 75) - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom')) || 0), left: landscape ? 282 : 20, right: W - 20 };
   }
   function next() {
     if (!H_) return;
-    H_.round++;
-    if (H_.round >= H_.rounds.length) return finish();
-    const R = H_.rounds[H_.round];
-    H_.target = R.target; H_.t0 = performance.now(); H_.roundHops = 0; H_.roundMiss = 0;
+    if (H_.round + 1 >= H_.rounds.length) return finish();
+    H_.round++; const R = H_.rounds[H_.round];
+    H_.target = R.target; H_.roundHops = H_.roundMiss = H_.roundHints = H_.penalty = H_.roundMs = 0; H_.pausedAt = null; H_.portalAt = null; H_.lastMiss = -1e9; H_.hintUntil = 0;
     H_.dist = H_.mode === 'dive' ? distFrom(R.target) : null;
+    phase('loading'); $('#huntRoutes').hidden = true; S.focus = 0; S.focusAnim = null; S.sel = S.selInst = null; setMode('EXPLORE');
+    $('#hCase').textContent = `${H_.daily ? 'DAILY' : 'QUICK'} · ${H_.mode.toUpperCase()}`;
+    $('#hRound').textContent = `${H_.round + 1} / ${H_.rounds.length}`; $('#hId').textContent = R.target.code;
+    $('#hMeta').textContent = R.target.place || R.target.sceneEn || 'LOCATION UNKNOWN';
+    $('#hProgress').innerHTML = H_.rounds.map((_, i) => `<i class="${i < H_.round ? 'done' : i === H_.round ? 'current' : ''}"></i>`).join('');
+    $('#hProgress').setAttribute('aria-label', `已完成 ${H_.round} 个，共 ${H_.rounds.length} 个目标`);
+    $('#hTime').textContent = '00:00.00'; feedback('正在载入目标，准备好再开始。');
     request(R.target, 'preview'); request(R.target, 'thumb');
-    el('#hCase').textContent = `CASE ${pad(caseNo(), 4)} · ${H_.mode.toUpperCase()}`;
-    el('#hRound').textContent = `TARGET ${H_.round + 1}/${H_.rounds.length}`;
-    el('#hId').textContent = R.target.code;
-    el('#hMeta').textContent = R.target.place ? `LAST SEEN · ${R.target.place.toUpperCase()}` : `LAST SEEN · ${R.target.sceneEn || 'URBAN'}`;
-    drawTargetThumb();
+    const rng = mulberry(+H_.date + H_.round * 97), sx = H_.daily ? Math.round((rng() - .5) * 2) : 0, sy = H_.daily ? Math.round((rng() - .5) * 2) : 0;
+    H_.inst = instAt(sectorDeal(sx, sy).index.get(R.target.i), sx, sy);
+    const area = safeArea();
     if (H_.mode === 'search') {
-      // place the target in a sector near (but not at) the operator: the wall is the haystack
-      if (S.mode === 'FOCUS') { S.focus = 0; S.focusAnim = null; S.sel = null; S.selInst = null; setMode('EXPLORE'); }
-      const rng = mulberry(+today() + H_.round * 97);
-      const sx = Math.round((rng() - .5) * 2), sy = Math.round((rng() - .5) * 2);
-      H_.inst = instAt(sectorDeal(sx, sy).index.get(R.target.i), sx, sy);
-      animView({ x: 0 + (sx * SECT.w * .3), y: (sy * SECT.h * .3), s: fitScale('grid') * .9 }, 900);
+      const scale = Math.max(fitScale('grid'), (H_.daily ? 50 - H_.round * 3 : 64) / U);
+      const targetX = H_.inst.x + H_.inst.w / 2, targetY = H_.inst.y + H_.inst.h / 2;
+      animView({ x: targetX + (rng() - .5) * (area.right - area.left) * .7 / scale + (W / 2 - (area.left + area.right) / 2) / scale,
+        y: targetY + (rng() - .5) * Math.max(70, area.bottom - area.top) * .55 / scale + (H / 2 - (area.top + area.bottom) / 2) / scale, s: scale }, REDUCE ? 250 : 850);
     } else {
-      // DIVE: drop the operator inside the start photograph
-      const it = instOfPhotoNear(R.start, view.x, view.y);
-      H_.inst = null;
-      if (S.mode === 'FOCUS') { S.focus = 0; S.focusAnim = null; setMode('EXPLORE'); }
-      view.x = it.x + it.w / 2; view.y = it.y + it.h / 2; view.s = fitScale('grid') * 2.2;
-      setTimeout(() => focusOn(it, 'hunt'), 120);
+      request(R.start, 'preview'); const it = instOfPhotoNear(R.start, view.x, view.y);
+      view.anim = null; view.x = it.x + it.w / 2; view.y = it.y + it.h / 2; view.s = fitScale('grid') * 2;
+      focusOn(it, 'hunt');
     }
-    blip(880, .12, .05); blip(1320, .2, .04);
+    const startAt = performance.now(), run = H_;
+    const ready = () => {
+      if (run !== H_) return;
+      const waiting = !best(R.target) || (R.start && !best(R.start));
+      if ((waiting || performance.now() - startAt < (REDUCE ? 300 : 1000)) && performance.now() - startAt < 6000) return later(ready, 100);
+      drawTargetThumb(); H_.t0 = performance.now(); phase('playing');
+      if ($('#modal').classList.contains('on')) modalChanged(true);
+      feedback(H_.mode === 'search' ? '对照特写，点开照片比对。找到了再确认。' : '选一条镜头路线，黄色信号会让你更近。');
+      renderRoutes(); syncAction();
+    };
+    ready(); syncAction();
   }
   function drawTargetThumb() {
-    const c = el('#hThumb'), g = c.getContext('2d'), p = H_.target;
-    const tryDraw = () => {
-      const im = best(p); g.fillStyle = '#080B0D'; g.fillRect(0, 0, 168, 168);
-      if (!im) { setTimeout(tryDraw, 150); return; }
-      // tight crop around the camera body: the operator gets a detail, not the scene
-      const b = p.cam.bbox, iw = im.naturalWidth, ih = im.naturalHeight;
-      const side = Math.max(b[2] * iw, b[3] * ih) * (H_.mode === 'search' ? 2.2 : 3.2);
-      const cx = (b[0] + b[2] / 2) * iw, cy = (b[1] + b[3] / 2) * ih;
-      g.drawImage(im, cx - side / 2, cy - side / 2, side, side, 0, 0, 168, 168);
-      g.strokeStyle = 'rgba(217,83,74,.9)'; g.lineWidth = 2; const k = 168 / side;
-      g.strokeRect(84 - b[2] * iw * k / 2 - 4, 84 - b[3] * ih * k / 2 - 4, b[2] * iw * k + 8, b[3] * ih * k + 8);
-    };
-    tryDraw();
+    if (!H_?.target) return;
+    const c = $('#hThumb'), g = c.getContext('2d'), p = H_.target, im = best(p), size = c.width;
+    g.fillStyle = C.bg; g.fillRect(0, 0, size, size);
+    if (!im) { const a = atlasCell(p, 'a64'); if (a) g.drawImage(a[0], a[1], a[2], a[3], a[3], 0, 0, size, size); return; }
+    const b = p.cam.bbox, iw = im.naturalWidth, ih = im.naturalHeight, side = Math.min(iw, ih, Math.max(b[2] * iw, b[3] * ih) * 2.5);
+    const x = clamp((b[0] + b[2] / 2) * iw - side / 2, 0, iw - side), y = clamp((b[1] + b[3] / 2) * ih - side / 2, 0, ih - side);
+    g.drawImage(im, x, y, side, side, 0, 0, size, size);
+    g.strokeStyle = '#D9534A'; g.lineWidth = 2; g.strokeRect((b[0] * iw - x) / side * size, (b[1] * ih - y) / side * size, b[2] * iw / side * size, b[3] * ih / side * size);
   }
-  // world distance from view centre to target instance → heat 0..1
-  function searchHeat() {
-    if (!H_ || !H_.inst) return 0;
-    const it = H_.inst, d = Math.hypot(it.x + it.w / 2 - view.x, it.y + it.h / 2 - view.y);
-    return clamp(1 - d / (SECT.w * 1.2), 0, 1);
+  function showTarget() {
+    if (!H_ || H_.phase !== 'playing' || S.mode === 'PORTAL') return;
+    drawTargetThumb();
+    openModal(`<button class="m-close" data-x>ESC</button><div class="m-k">TARGET · ${H_.target.code}</div><div class="m-t">记住这台摄像头。</div>
+      <img class="target-detail" src="${$('#hThumb').toDataURL()}" alt="目标摄像头放大特写"><div class="m-p">位置线索：${H_.target.place || H_.target.sceneEn || '未知'}。对照机身轮廓、支架和周围背景。</div>
+      <div id="sceneClue"></div><div class="m-row"><button class="m-btn primary" data-x>继续行动</button><button class="m-btn" id="sceneHint">查看环境 +8s</button></div><div class="game-note">此时已暂停计时。查看放大特写不扣分。</div>`);
+    $('#sceneHint').onclick = () => { if (!chargeHint()) return; $('#sceneClue').innerHTML = `<img class="scene-detail" src="${BASE}preview/${H_.target.id}.webp" alt="目标所在的完整照片">`; $('#sceneHint').disabled = true; $('#sceneHint').textContent = '环境已解锁 · +8s'; };
+  }
+  function chargeHint() {
+    if (!H_ || H_.phase !== 'playing') return false;
+    H_.assists++; H_.roundHints++; H_.penalty += 8000; return true;
+  }
+  function assist() {
+    if (!canInteract() || !H_ || S.mode === 'PORTAL' || !chargeHint()) return;
+    if (H_.mode === 'search') {
+      if (S.mode === 'FOCUS') { S.focus = 0; S.focusAnim = null; S.sel = S.selInst = null; setMode('EXPLORE'); }
+      const a = safeArea(), it = H_.inst, scale = Math.max(view.s, 72 / U);
+      animView({ x: it.x + it.w / 2 + (W / 2 - (a.left + a.right) / 2) / scale + it.w * .8,
+        y: it.y + it.h / 2 + (H / 2 - (a.top + a.bottom) / 2) / scale, s: scale }, REDUCE ? 250 : 650);
+      H_.hintUntil = performance.now() + 6000; feedback('扫描完成：目标在虚线圈内。线索 +8 秒。', 'warn');
+    } else {
+      const idx = bestRoute(); $('#huntRoutes').querySelectorAll('[data-lens]').forEach(b => b.classList.toggle('suggested', +b.dataset.lens === idx));
+      feedback(`已标出镜头 ${idx + 1}，它会让你更近。线索 +8 秒。`, 'warn');
+    }
+  }
+  function bestRoute() {
+    let index = 0, distance = Infinity; S.routes.forEach((p, k) => { const d = H_.dist.get(p) ?? Infinity; if (d < distance) { distance = d; index = k; } }); return index;
+  }
+  function route(p, k) {
+    if (!H_ || H_.mode !== 'dive' || !H_.dist || k !== (H_.round * 7 + p.i) % Math.max(1, p.cams.length)) return null;
+    const here = H_.dist.get(p), cands = p.links.map(id => byId.get(id)).filter(q => q && H_.dist.has(q)).sort((a, b) => H_.dist.get(a) - H_.dist.get(b));
+    if (cands[0] && (here == null || H_.dist.get(cands[0]) < here)) return cands[0];
+    // A reachable return route prevents a dead end after taking a colder branch.
+    const back = P.filter(q => !q.local && q !== p && H_.dist.get(q) === 1); return back[(p.i + H_.round) % Math.max(1, back.length)] || H_.target;
   }
   function heatOf(p, k) {
-    if (!H_ || H_.mode !== 'dive' || !H_.dist) return null;
-    const to = S.routes[k]; if (!to) return null;
-    if (to === H_.target) return C.admin;
-    const d = H_.dist.get(to), here = H_.dist.get(p);
-    if (d == null) return '120,130,140';
-    if (here != null && d < here) return C.admin;
-    if (here != null && d === here) return C.white;
-    return '120,130,140';
+    if (!H_ || H_.mode !== 'dive') return null;
+    const to = S.routes[k], d = H_.dist?.get(to), here = H_.dist?.get(p);
+    return to === H_.target || (d != null && (here == null || d < here)) ? C.admin : d === here ? C.white : '120,130,140';
   }
   function heatWord(p, k) {
     if (!H_ || H_.mode !== 'dive') return 'ENTER';
-    const to = S.routes[k]; if (to === H_.target) return 'SIGNAL LOCKED';
-    const d = H_.dist && H_.dist.get(to), here = H_.dist && H_.dist.get(p);
-    if (d == null) return 'NO SIGNAL';
-    return here != null && d < here ? `WARMER · ${d} HOPS` : here != null && d === here ? `SAME · ${d} HOPS` : `COLDER · ${d} HOPS`;
+    const d = H_.dist.get(S.routes[k]), here = H_.dist.get(p);
+    return d == null ? 'NO SIGNAL' : d === 0 ? 'TARGET · 1 HOP' : `${here == null || d < here ? 'WARMER' : d === here ? 'SAME' : 'COLDER'} · ${d + 1} HOPS`;
   }
-  // DIVE: one lens leads towards the target, so a careful operator can always make progress
-  function route(p, k) {
-    if (!H_ || H_.mode !== 'dive' || !H_.dist) return null;
-    if (k !== Math.floor((H_.round * 7 + p.i) % Math.max(1, p.cams.length))) return null;
-    const cands = p.links.map(id => byId.get(id)).filter(q => q && H_.dist.has(q));
-    if (p.links.includes(H_.target.id)) return H_.target;
-    cands.sort((a, b) => H_.dist.get(a) - H_.dist.get(b));
-    const here = H_.dist.get(p);
-    if (cands[0] && (here == null || H_.dist.get(cands[0]) < here)) return cands[0];
-    // otherwise a shortcut: the machine opens a door one hop away from the target
-    const near = P.filter(q => H_.dist.get(q) === 1 && q !== p);
-    return near.length && rnd() < .5 ? near[Math.floor(rnd() * near.length)] : null;
+  function renderRoutes() {
+    const host = $('#huntRoutes');
+    if (!H_ || H_.mode !== 'dive' || S.mode !== 'FOCUS' || H_.phase === 'locked') { host.hidden = true; return; }
+    const here = H_.dist.get(S.sel);
+    host.innerHTML = `<div class="route-label">点照片中的光圈，或选择镜头穿越</div><div class="route-list">${S.routes.map((p, k) => {
+      const d = H_.dist.get(p), warmer = d != null && (here == null || d < here), text = d == null ? '信号较弱 · 可以绕行' : d === 0 ? '目标信号 · 再跳一次' : `${warmer ? '更近' : d === here ? '距离相同' : '更远'} · 共 ${d + 1} 跳抵达`;
+      return `<button data-lens="${k}" data-warmer="${warmer}" ${!canInteract() ? 'disabled' : ''}><b>LENS ${pad(k + 1)} →</b>${text}</button>`;
+    }).join('')}</div>`;
+    host.hidden = false; host.querySelectorAll('[data-lens]').forEach(b => b.onclick = () => follow(+b.dataset.lens));
   }
+  function follow(k) { if (!H_ || H_.mode !== 'dive' || !canInteract() || S.mode !== 'FOCUS' || !S.routes[k]) return; if (!confirm(S.sel, k)) enter(null, k); }
   function onFocus(it) {
     if (!H_ || !it) return;
-    if (H_.mode === 'dive') { H_.hops = H_.hops; if (it.p === H_.target) win(it); }
+    document.querySelectorAll('.stamp.red').forEach(el => el.remove());
+    if (H_.portalAt != null && H_.phase === 'playing') {
+      H_.t0 = performance.now() - H_.portalElapsed + H_.penalty; H_.portalAt = null;
+      if (H_.pausedAt != null) H_.pausedAt = performance.now();
+    }
+    if (H_.phase === 'playing' && H_.mode === 'dive' && it.p === H_.target) return win();
+    if (H_.phase === 'playing' && H_.mode === 'search') feedback(it.p === H_.target ? '目标匹配！点高亮镜头，或按下方按钮确认。' : '这台与目标不符。返回照片墙继续找，查看不扣分。', it.p === H_.target ? 'good' : '');
+    renderRoutes(); syncAction();
   }
   function confirm(p, k, x, y) {
     if (!H_) return false;
+    if (!canInteract() || H_.phase !== 'playing') return true;
     if (H_.mode === 'search') {
-      if (p === H_.target && k === 0 || p === H_.target && p.cams.length === 1) { win(null, x, y); return true; }
-      if (p === H_.target) { win(null, x, y); return true; }
-      H_.misses++; H_.roundMiss++; penalty(x, y); return true;
+      if (p === H_.target) win(x, y);
+      else if (performance.now() - H_.lastMiss > 700) {
+        H_.lastMiss = performance.now(); H_.misses++; H_.roundMiss++; H_.penalty += 2000;
+        feedback('确认未匹配 · +2 秒。返回墙面，重新对照目标。', 'warn'); stamp(x || W / 2, y || H / 2, 'NO MATCH', '+2.00 S', true); blip(180, .15, .035);
+      }
+      return true;
     }
-    // dive: entering a lens is a hop
-    H_.hops++; H_.roundHops++;
-    return false;
+    H_.hops++; H_.roundHops++; $('#huntRoutes').querySelectorAll('button').forEach(b => b.disabled = true); return false;
   }
-  function fastPortal() { return !!H_; }
-  // SEARCH: clicking a wrong tile is answered instantly — no need to open it
-  function tileClick(it, x, y) {
-    if (!H_ || H_.mode !== 'search') return false;
-    if (it.p === H_.target) return false;
-    H_.misses++; H_.roundMiss++;
-    H_.t0 -= 2000;
-    stamp(x, y, 'NO MATCH', '+2.00 S', true);
-    blip(180, .2, .05, 'square');
-    deniedKeys.set(it.key, performance.now());
-    return true;
+  function tileClick() { return !!H_ && !canInteract(); }
+  function win(x, y) {
+    if (!H_ || H_.phase !== 'playing' || H_.pausedAt != null) return;
+    H_.roundMs = elapsed(); H_.total += H_.roundMs;
+    H_.splits.push({ p: H_.target, t: H_.roundMs, hops: H_.roundHops, miss: H_.roundMiss }); H_.target.visited = true;
+    phase('locked'); $('#huntRoutes').hidden = true;
+    feedback(`目标已确认 · ${fmtT(H_.roundMs)}${H_.mode === 'dive' ? ' · ' + H_.roundHops + ' 跳' : ''}`, 'good');
+    $('#hProgress').children[H_.round]?.classList.add('done'); $('#hTime').textContent = fmtT(H_.roundMs);
+    $('#hProgress').setAttribute('aria-label', `已完成 ${H_.splits.length} 个，共 ${H_.rounds.length} 个目标`);
+    if (!REDUCE) { flash = performance.now(); stamp(x || W / 2, y || H * .6, 'TARGET ACQUIRED', fmtT(H_.roundMs)); }
+    chord([660, 880, 1320], .3, .04); syncAction();
   }
-  function miss(x, y) { if (H_ && H_.mode === 'search' && S.mode === 'EXPLORE') { /* clicking empty space costs nothing */ } }
-  function penalty(x, y) {
-    H_.t0 -= 3000; // +3s
-    stamp(x || W / 2, y || H / 2, 'NEGATIVE MATCH', '+3.00 S', true);
-    blip(180, .25, .06, 'square');
-    document.body.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }], { duration: 260 });
+  function syncAction() {
+    if (!H_) return;
+    const button = $('#hAction'), locked = H_.phase === 'locked', target = H_.mode === 'search' && S.mode === 'FOCUS' && S.sel === H_.target;
+    button.classList.toggle('ready', locked || target);
+    button.textContent = locked ? (H_.round + 1 === H_.rounds.length ? '查看成绩 →' : '下一目标 →') : target ? '确认目标 ✓' : H_.mode === 'search' ? '扫描范围 +8s' : '标出路线 +8s';
+    button.disabled = H_.phase === 'loading' || S.mode === 'PORTAL'; $('#hTarget').disabled = H_.phase !== 'playing' || S.mode === 'PORTAL';
   }
-  function win(it, x, y) {
-    const t = performance.now() - H_.t0;
-    H_.total += t; H_.splits.push({ p: H_.target, t, hops: H_.roundHops, miss: H_.roundMiss });
-    const r = H_.target.fr || focusRect(H_.target);
-    const lx = x || (r.x + r.w / 2), ly = y || (r.y + r.h / 2);
-    stamp(lx, ly, `TARGET ACQUIRED · ${H_.target.code}`, fmtT(t));
-    chord([660, 880, 1320], .4, .05);
-    flash = performance.now();
-    H_.target.visited = true;
-    const was = H_.round;
-    setTimeout(() => { if (H_ && H_.round === was) { if (S.mode === 'FOCUS') { S.focusAnim = { from: S.focus, to: 0, t0: performance.now(), dur: 500 }; setMode('EXPLORE'); } next(); } }, 1500);
+  function action() { if (!H_) return; if (H_.phase === 'locked') next(); else if (H_.mode === 'search' && S.mode === 'FOCUS' && S.sel === H_.target) confirm(S.sel, 0); else assist(); }
+  function pause(abort = false) {
+    if (!H_) return;
+    openModal(`<button class="m-close" data-x>ESC</button><div class="m-k">${H_.mode.toUpperCase()} · ${H_.round + 1}/${H_.rounds.length}</div><div class="m-t">${abort ? '结束这次任务？' : '任务已暂停。'}</div>
+      <div class="m-p">${abort ? '本次进度不会计入排行榜。也可以继续，计时已暂停。' : '休息一下。关闭窗口即可从原处继续，暂停时间不会计入成绩。'}</div>
+      <div class="m-row"><button class="m-btn primary" data-x>继续行动</button><button class="m-btn" id="endRun">结束并返回照片墙</button></div>
+      <div class="m-row"><button class="m-btn" id="gameSound">${S.sound ? '关闭声音' : '开启声音'}</button></div>`);
+    $('#endRun').onclick = end;
+    $('#gameSound').onclick = () => { setSound(!S.sound); $('#gameSound').textContent = S.sound ? '关闭声音' : '开启声音'; };
   }
-  let flash = 0;
+  function cleanup() {
+    const h = H_; cancelTimers(); S.hunt = H_ = null; document.body.classList.remove('hunting', 'search', 'dive'); delete document.body.dataset.phase;
+    $('#huntRoutes').hidden = true; S.focus = 0; S.focusAnim = null; S.sel = S.selInst = null; S.portal = null; setMode('EXPLORE');
+    view.anim = null; view.vx = view.vy = 0; view.zt = null; if (h) Object.assign(view, h.returnView);
+    return h;
+  }
+  function end() { if (!H_) return; cleanup(); closeModal(); hint('已返回照片墙 · 随时可以再开始', 2800); }
   function finish() {
-    const h = H_, total = h.total, sec = total / 1000;
-    const per = sec / h.rounds.length + (h.mode === 'dive' ? h.hops * 2 / h.rounds.length : 0);
-    const rank = RANKS.find(r => per * (h.mode === 'search' ? 1 : .8) < r[0] / 5 * 1 + (r[0] === 0 ? 10 : 0)) || RANKS[RANKS.length - 1];
-    const rankName = per < 14 ? 'ADMIN' : per < 26 ? 'PRIMARY ASSET' : per < 45 ? 'ANALOG INTERFACE' : per < 80 ? 'ASSET' : 'IRRELEVANT';
-    const key = h.mode + '_' + (h.daily ? today() : 'free');
-    const b = board(key); const rec = { h: h.h, t: Math.round(total), hops: h.hops, rank: rankName, mode: h.mode, at: Date.now() };
-    b.push(rec); b.sort((a, c) => (a.t + (a.hops || 0) * 2000) - (c.t + (c.hops || 0) * 2000)); saveBoard(key, b);
-    const place = b.indexOf(rec) + 1;
-    S.hunt = H_ = null; document.body.classList.remove('hunting');
-    say(rankName === 'ADMIN' ? 'ADMIN ACCESS GRANTED' : 'CASE CLOSED', `${fmtT(total)} · ${rankName}`);
-    chord([523, 659, 784, 1046], .6, .05);
-    setTimeout(() => results(h, rec, place), 2400);
+    if (!H_ || H_.splits.length !== H_.rounds.length) return;
+    const h = H_, per = h.total / 1000 / h.rounds.length;
+    const rec = { h: h.h, t: Math.round(h.total), hops: h.hops, assists: h.assists, rank: per < 20 ? 'ADMIN' : per < 40 ? 'PRIMARY ASSET' : per < 70 ? 'ANALOG INTERFACE' : 'CASE CLOSED', mode: h.mode, at: Date.now() };
+    let place = 0;
+    if (h.daily) {
+      const b = board(h.mode, h.date); b.push(rec); b.sort((a, c) => a.t - c.t || (a.hops || 0) - (c.hops || 0)); place = b.indexOf(rec) + 1;
+      try { localStorage.setItem('tm_board_v2_' + h.mode + '_' + h.date, JSON.stringify(b.slice(0, 20))); } catch (e) { }
+    }
+    cleanup(); results(h, rec, place); chord([523, 659, 784, 1046], .5, .04);
   }
   function results(h, rec, place) {
-    openModal(`<button class="m-close" data-x>ESC</button>
-      <div class="m-k">CASE ${pad(caseNo(), 4)} · ${h.mode.toUpperCase()} · ${h.daily ? 'DAILY ' + today() : 'FREE RUN'} · OPERATOR ${h.h}</div>
-      <div class="m-big">${fmtT(rec.t)}</div>
-      <div class="m-rank">${rec.rank}</div>
-      <div class="m-p" style="color:var(--muted)">${h.mode === 'dive' ? `${rec.hops} HOPS · ` : ''}${h.misses} NEGATIVE MATCHES · #${place} ON THIS DEVICE</div>
-      <div class="m-splits">${h.splits.map((s, i) => `<div><canvas data-s="${i}" width="120" height="120"></canvas>${s.p.code}<br>${fmtT(s.t)}${h.mode === 'dive' ? ' · ' + s.hops + 'H' : ''}</div>`).join('')}</div>
-      <div class="m-row"><button class="m-btn primary" data-card>DOWNLOAD CARD</button><button class="m-btn" data-again>AGAIN</button><button class="m-btn" data-board>LEADERBOARD</button></div>`);
-    $('#mBox').querySelectorAll('[data-s]').forEach(c => { const s = h.splits[+c.dataset.s]; const g = c.getContext('2d'); const im = best(s.p); if (im) { const sd = Math.min(im.naturalWidth, im.naturalHeight); g.drawImage(im, (im.naturalWidth - sd) * s.p.anchor[0], (im.naturalHeight - sd) * s.p.anchor[1], sd, sd, 0, 0, 120, 120); } });
-    $('#mBox').querySelector('[data-again]').onclick = brief;
-    $('#mBox').querySelector('[data-board]').onclick = showBoard;
-    $('#mBox').querySelector('[data-card]').onclick = () => card(h, rec);
+    openModal(`<button class="m-close" data-x>ESC</button><div class="m-k">${h.daily ? 'DAILY ' + h.date : 'QUICK RUN'} · ${h.mode.toUpperCase()} · CASE CLOSED</div>
+      <div class="m-t">${h.rounds.length} 个目标，全部确认。</div><div class="m-big">${fmtT(rec.t)}</div><div class="m-rank">${rec.rank}</div>
+      <div class="game-stats"><div><b>${h.mode === 'dive' ? h.hops : h.misses}</b>${h.mode === 'dive' ? '镜头跳数' : '确认误判'}</div><div><b>${h.assists}</b>使用线索</div><div><b>${h.daily ? '#' + place : '✓'}</b>${h.daily ? '今日本机排名' : '快速体验完成'}</div></div>
+      <div class="m-splits">${h.splits.map((s, i) => `<div><canvas data-s="${i}" width="120" height="120"></canvas>${s.p.code}<br>${fmtT(s.t)}</div>`).join('')}</div>
+      <div class="game-note">${h.daily ? '成绩已记入今日排行榜。' : '快速体验不计入每日榜。准备好后可以试试每日挑战。'}用时已包含线索和误判罚时，暂停、载图与过场不计时。</div>
+      <div class="m-row"><button class="m-btn primary" data-again>再玩一次</button><button class="m-btn" data-card>保存成绩卡</button><button class="m-btn" data-board>今日排行</button></div>`);
+    $('#mBox').querySelectorAll('[data-s]').forEach(c => { const p = h.splits[+c.dataset.s].p, im = best(p); if (im) { const sd = Math.min(im.naturalWidth, im.naturalHeight); c.getContext('2d').drawImage(im, (im.naturalWidth - sd) * p.anchor[0], (im.naturalHeight - sd) * p.anchor[1], sd, sd, 0, 0, 120, 120); } });
+    $('#mBox').querySelector('[data-again]').onclick = brief; $('#mBox').querySelector('[data-board]').onclick = showBoard; $('#mBox').querySelector('[data-card]').onclick = () => card(h, rec);
   }
   function card(h, rec) {
     const c = document.createElement('canvas'); c.width = 1080; c.height = 1350; const g = c.getContext('2d');
@@ -1594,45 +1663,39 @@ const Hunt = (() => {
     g.strokeStyle = 'rgba(232,197,71,.9)'; g.lineWidth = 2; bracket(g, 30, 30, 1020, 1290, 40, 'rgba(232,197,71,.9)', 2);
     const a = document.createElement('a'); a.download = `THE_MACHINE_CASE${pad(caseNo(), 4)}_${h.h}.png`; a.href = c.toDataURL('image/png'); a.click();
   }
-  function end(done) { if (!H_) return; S.hunt = H_ = null; document.body.classList.remove('hunting'); say('CASE ABANDONED', 'THE NUMBER REMAINS'); }
-  // overlay: HUD timer, heat bar, edge compass toward the target
   function draw(now) {
-    const fl = flash ? clamp(1 - (now - flash) / 500, 0, 1) : 0;
-    if (fl > 0) { fx.fillStyle = `rgba(232,197,71,${.18 * fl})`; fx.fillRect(0, 0, W, H); }
-    if (!H_ || H_.round < 0 || H_.round >= H_.rounds.length) return;
-    const t = now - H_.t0;
-    el('#hTime').textContent = fmtT(t);
-    if (H_.mode === 'search') {
-      const h = searchHeat();
-      el('#hHeat').style.width = (h * 100).toFixed(1) + '%';
-      el('#hHeat').style.background = h > .85 ? 'var(--admin)' : 'var(--threat)';
-      el('#hDist').textContent = h > .92 ? 'SIGNAL · VERY STRONG — 目标就在视野里' : h > .7 ? 'SIGNAL · STRONG' : h > .4 ? 'SIGNAL · WEAK' : 'SIGNAL · FAINT';
-      if (S.mode !== 'EXPLORE') return;
-      const it = H_.inst, r = toScreen(it), cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-      const on = cx > 0 && cx < W && cy > 0 && cy < H;
-      if (!on) {
-        // edge compass
-        const ang = Math.atan2(cy - H / 2, cx - W / 2), m = 46;
-        const ex = clamp(W / 2 + Math.cos(ang) * W, m, W - m), ey = clamp(H / 2 + Math.sin(ang) * H, m + 40, H - m);
-        fx.save(); fx.translate(ex, ey); fx.rotate(ang);
-        fx.fillStyle = `rgba(${C.threat},${.6 + .4 * Math.sin(now / 200)})`; fx.beginPath(); fx.moveTo(12, 0); fx.lineTo(-6, -8); fx.lineTo(-6, 8); fx.closePath(); fx.fill();
-        fx.restore();
-        fx.font = `9px ${MONO}`; fx.fillStyle = `rgba(${C.threat},.9)`; fx.fillText(`${Math.round(Math.hypot(cx - W / 2, cy - H / 2) / view.s / PITCH)} CELLS`, clamp(ex - 24, 8, W - 70), ey + (ey > H / 2 ? -14 : 22));
-      } else if (h > .5 && r.w > 6) {
-        // close: the machine narrows the search area (a circle that doesn't give it away exactly)
-        const rad = Math.max(r.w * 2.4, 60) * (1.2 - h * .4), jx = Math.sin(H_.round * 3.1) * rad * .35, jy = Math.cos(H_.round * 2.3) * rad * .35;
-        fx.setLineDash([4, 6]); fx.lineDashOffset = -now / 50; fx.strokeStyle = `rgba(${C.threat},${.35 + .25 * Math.sin(now / 300)})`; fx.lineWidth = 1;
-        fx.beginPath(); fx.arc(cx + jx, cy + jy, rad, 0, Math.PI * 2); fx.stroke(); fx.setLineDash([]);
-        if (r.w > 50 && h > .8) { fx.strokeStyle = `rgba(${C.threat},.85)`; bracket(fx, r.x - 4, r.y - 4, r.w + 8, r.h + 8, 10, `rgba(${C.threat},.9)`, 1.5); }
+    if (flash && !REDUCE) { const f = clamp(1 - (now - flash) / 400, 0, 1); if (f) { fx.fillStyle = `rgba(149,216,183,${f * .1})`; fx.fillRect(0, 0, W, H); } }
+    if (!H_?.target) return;
+    if (now - hudAt > 100) {
+      hudAt = now; $('#hTime').textContent = fmtT(elapsed(now)); syncAction();
+      if (H_.mode === 'search') {
+        const it = H_.inst, distance = Math.hypot(it.x + it.w / 2 - view.x, it.y + it.h / 2 - view.y) / PITCH;
+        const heat = clamp(1 - distance / 14, 0, 1); $('#hHeat').style.width = heat * 100 + '%'; $('#hHeat').style.background = heat > .7 ? 'var(--admin)' : 'var(--threat)';
+        const r = toScreen(it), a = safeArea(), visible = r.x + r.w > a.left && r.x < a.right && r.y + r.h > a.top && r.y < a.bottom;
+        $('#hDist').textContent = S.mode === 'FOCUS' ? (S.sel === H_.target ? 'MATCH FOUND · 点击确认' : 'NO MATCH · 返回继续找') : visible ? (r.w < 34 ? '目标已在视野内 · 双指 / 滚轮放大' : '目标已在视野内 · 对照特写找一找') : `顺着箭头找 · 约 ${Math.max(1, Math.round(distance))} 格`;
+      } else {
+        const here = H_.dist.get(S.sel); $('#hHeat').style.width = here == null ? '5%' : clamp(100 - here * 17, 8, 100) + '%'; $('#hHeat').style.background = here <= 1 ? 'var(--admin)' : 'var(--threat)';
+        $('#hDist').textContent = H_.phase === 'locked' ? 'ARRIVED · 已抵达目标' : `已走 ${H_.roundHops} 跳 · ${here == null ? '试试更强的信号' : '最短还需 ' + here + ' 跳'}`;
       }
-    } else {
-      const here = S.sel && H_.dist ? H_.dist.get(S.sel) : null;
-      el('#hHeat').style.width = here == null ? '4%' : clamp(100 - here * 18, 6, 100) + '%';
-      el('#hHeat').style.background = here != null && here <= 1 ? 'var(--admin)' : 'var(--threat)';
-      el('#hDist').textContent = `HOPS ${pad(H_.roundHops)} · ${here == null ? 'NO PATH' : here === 0 ? 'ARRIVED' : here + ' HOPS AWAY'}`;
     }
+    if (H_.phase !== 'playing' || H_.pausedAt != null || H_.mode !== 'search' || S.mode !== 'EXPLORE') return;
+    const r = toScreen(H_.inst), cx = r.x + r.w / 2, cy = r.y + r.h / 2, a = safeArea();
+    if (cx < a.left || cx > a.right || cy < a.top || cy > a.bottom) {
+      const midX = (a.left + a.right) / 2, midY = (a.top + a.bottom) / 2, dx = cx - midX, dy = cy - midY;
+      const scale = Math.min(((a.right - a.left) / 2 - 14) / Math.max(1, Math.abs(dx)), ((a.bottom - a.top) / 2 - 14) / Math.max(1, Math.abs(dy)));
+      fx.save(); fx.translate(midX + dx * scale, midY + dy * scale); fx.rotate(Math.atan2(dy, dx)); fx.fillStyle = '#E8C547'; fx.beginPath(); fx.moveTo(11, 0); fx.lineTo(-6, -7); fx.lineTo(-6, 7); fx.closePath(); fx.fill(); fx.restore();
+    }
+    if (H_.hintUntil > now) { const rad = Math.max(70, r.w * 1.8); fx.setLineDash([5, 6]); fx.strokeStyle = 'rgba(232,197,71,.8)'; fx.lineWidth = 1.5; fx.beginPath(); fx.arc(cx, cy, rad, 0, Math.PI * 2); fx.stroke(); fx.setLineDash([]); }
   }
-  return { brief, start, end, draw, confirm, miss, tileClick, onFocus, heatOf, heatWord, route, fastPortal, onEnter: () => { } };
+  function snapshot() {
+    if (!H_) return null;
+    return { mode: H_.mode, daily: H_.daily, phase: H_.phase, paused: H_.pausedAt != null, round: H_.round + 1, count: H_.rounds.length, completed: H_.splits.length,
+      target: H_.target?.code, timerMs: Math.round(elapsed()), assists: H_.assists, penaltyMs: H_.penalty, hops: H_.hops, misses: H_.misses, feedback: $('#hFeedback').textContent,
+      routes: H_.mode === 'dive' && S.sel ? S.routes.map((p, k) => ({ lens: k + 1, target: p.code, hopsRemaining: H_.dist.get(p) ?? null, warmer: heatOf(S.sel, k) === C.admin })) : [] };
+  }
+  $('#hTarget').onclick = showTarget; $('#hAction').onclick = action; $('#hPause').onclick = () => pause(); $('#hQuit').onclick = () => pause(true);
+  document.addEventListener('visibilitychange', () => { if (document.hidden && H_ && !$('#modal').classList.contains('on')) pause(); });
+  return { brief, start, end, draw, confirm, tileClick, onFocus, heatOf, heatWord, route, snapshot, canInteract, modalChanged, action, pause, miss: () => {}, fastPortal: () => !!H_, onEnter: () => { if (H_) { H_.portalElapsed = elapsed(); H_.portalAt = performance.now(); $('#huntRoutes').hidden = true; } } };
 })();
 
 /* =====================================================================
@@ -1836,16 +1899,29 @@ $('#observer').title = '点击：让机器看见你（可选）';
 let modalReturnFocus = null;
 function openModal(html) {
   const m = $('#modal');
+  Hunt.modalChanged(true);
   if (!m.classList.contains('on')) modalReturnFocus = document.activeElement;
   $('#mBox').innerHTML = html; $('#mBox').scrollTop = 0; m.inert = false; m.classList.add('on');
   $('#mBox').querySelectorAll('[data-x]').forEach(b => b.onclick = closeModal);
   $('#mBox').querySelectorAll('[data-x]').forEach(b => { if (b.textContent === 'ESC') b.textContent = 'CLOSE ×'; });
   $('#mBox').focus({ preventScroll: true });
 }
-function closeModal() { $('#modal').classList.remove('on'); $('#modal').inert = true; modalReturnFocus?.focus?.({ preventScroll: true }); }
+function closeModal() { $('#modal').classList.remove('on'); $('#modal').inert = true; Hunt.modalChanged(false); modalReturnFocus?.focus?.({ preventScroll: true }); }
 $('#modal').addEventListener('pointerdown', e => { if (e.target.id === 'modal') closeModal(); });
 
 /* ---------- go ---------- */
+window.render_game_to_text = () => JSON.stringify({
+  coordinates: 'CSS pixels; origin top-left; x right, y down',
+  screen: { width: W, height: H }, mode: S.mode, layout: S.layout, game: Hunt.snapshot(),
+  selected: S.sel ? { code: S.sel.code, rect: S.sel.fr, lenses: S.sel.cams.map(c => ({ x: S.sel.fr ? proj(S.sel.fr, ...c.lens)[0] : 0, y: S.sel.fr ? proj(S.sel.fr, ...c.lens)[1] : 0 })) } : null,
+  visible: VIS.filter(it => it.sr && it.sr.x >= 0 && it.sr.y >= 0 && it.sr.x + it.sr.w <= W && it.sr.y + it.sr.h <= H).sort((a, b) => Number(b.p === S.hunt?.target) - Number(a.p === S.hunt?.target)).slice(0, 80).map(it => ({ code: it.p.code, x: it.sr.x, y: it.sr.y, w: it.sr.w, h: it.sr.h })),
+  modal: $('#modal').classList.contains('on')
+});
+window.advanceTime = ms => new Promise(resolve => {
+  const until = performance.now() + Math.max(0, ms);
+  const step = now => now >= until ? resolve() : requestAnimationFrame(step);
+  requestAnimationFrame(step);
+});
 P.forEach((p, i) => { p.ai = i; });
 resize();
 buildSector(); buildAtlas();

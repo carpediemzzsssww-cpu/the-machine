@@ -7,6 +7,7 @@
 <title>THE MACHINE</title>
 <meta name="description" content="An interactive archive of watching eyes.">
 <link rel="stylesheet" href="css/machine.css">
+<link rel="stylesheet" href="css/search.css">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -63,19 +64,25 @@
 <button id="back" class="back" aria-label="返回照片墙">← BACK</button>
 
 <!-- THE SEARCH: game HUD -->
-<section id="hunt" class="hunt-hud" aria-live="polite">
+<section id="hunt" class="hunt-hud" aria-label="当前任务">
   <div class="h-card">
     <div class="h-head"><span id="hCase">CASE 0000</span><span id="hRound">TARGET 1/5</span></div>
-    <div class="h-target"><canvas id="hThumb" width="168" height="168"></canvas><i class="h-scan"></i></div>
+    <div id="hProgress" class="h-progress" aria-label="任务进度"></div>
+    <button id="hTarget" class="h-target" aria-label="放大目标线索"><canvas id="hThumb" width="216" height="216"></canvas><i class="h-scan"></i><span>放大线索 ↗</span></button>
     <div class="h-id" id="hId">CAM_0000</div>
     <div class="h-meta" id="hMeta">LAST SEEN · SECTOR —</div>
     <div class="h-time" id="hTime">00:00.00</div>
     <div class="h-heat"><i id="hHeat"></i></div>
     <div class="h-dist" id="hDist">SIGNAL —</div>
-    <div class="h-help">找到这台摄像头 · 点开照片 · 点击镜头确认</div>
-    <button id="hQuit" class="h-quit">ABORT</button>
+    <div id="hFeedback" class="h-feedback" role="status">正在接入目标…</div>
+    <div class="h-actions">
+      <button id="hAction" class="h-action">扫描范围 +8s</button>
+      <button id="hPause">暂停</button>
+      <button id="hQuit">退出</button>
+    </div>
   </div>
 </section>
+<div id="huntRoutes" class="hunt-routes" aria-label="选择穿越镜头" hidden></div>
 
 <section id="modal" class="modal" role="dialog" aria-modal="true" aria-label="THE MACHINE" inert><div class="m-box" id="mBox" tabindex="-1"></div></section>
 <input type="file" id="fileIn" accept="image/*" hidden>
